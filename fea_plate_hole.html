@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FEA Plate with Circular Hole</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  :root {
+    --bg:#07090e; --panel:rgba(10,14,22,0.92); --border:#1a2535;
+    --accent:#00e5ff; --accent2:#ff5722; --text:#cde0f0; --dim:#3d5568;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow:hidden;height:100vh;width:100vw;}
+  #three-canvas{position:fixed;top:0;left:0;width:100%;height:100%;}
+
+  .hud{position:fixed;pointer-events:none;z-index:10;}
+
+  #topbar{top:0;left:0;right:0;height:44px;background:var(--panel);border-bottom:1px solid var(--border);
+    display:flex;align-items:center;padding:0 20px;gap:20px;backdrop-filter:blur(8px);}
+  #topbar h1{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--accent);letter-spacing:1.5px;white-space:nowrap;}
+  .tags{display:flex;gap:8px;flex:1;flex-wrap:wrap;}
+  .tag{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);border:1px solid var(--border);padding:2px 8px;border-radius:2px;}
+  .tag.live{color:var(--accent);border-color:var(--accent);}
+
+  #leftpanel{top:44px;left:0;width:240px;bottom:28px;background:var(--panel);border-right:1px solid var(--border);
+    backdrop-filter:blur(8px);overflow-y:auto;pointer-events:all;}
+  .sec{border-bottom:1px solid var(--border);padding:11px 14px;}
+  .sec-title{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;color:var(--accent);letter-spacing:1.5px;margin-bottom:9px;text-transform:uppercase;}
+  .btn-grid{display:flex;flex-direction:column;gap:5px;}
+  .mbtn{background:transparent;border:1px solid var(--border);color:var(--dim);font-family:'JetBrains Mono',monospace;
+    font-size:10px;padding:6px 10px;cursor:pointer;text-align:left;letter-spacing:0.5px;transition:all 0.15s;width:100%;}
+  .mbtn:hover{border-color:var(--accent);color:var(--accent);}
+  .mbtn.active{border-color:var(--accent);background:rgba(0,229,255,0.08);color:var(--accent);}
+  select.msel{background:#0a0f17;border:1px solid var(--border);color:var(--text);font-family:'Inter',sans-serif;
+    font-size:11px;padding:6px 8px;width:100%;letter-spacing:0.2px;cursor:pointer;}
+  select.msel:focus{outline:none;border-color:var(--accent);}
+  .sl-group{margin-bottom:10px;}
+  .sl-hdr{display:flex;justify-content:space-between;margin-bottom:3px;}
+  .sl-label{font-size:11px;color:var(--dim);}
+  .sl-val{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);}
+  input[type=range]{width:100%;accent-color:var(--accent);}
+  .res-item{margin-bottom:7px;}
+  .res-label{font-size:10px;color:var(--dim);margin-bottom:1px;}
+  .res-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;}
+  .c-danger{color:#f87171;} .c-ok{color:#4ade80;} .c-warn{color:#fbbf24;} .c-info{color:var(--accent);}
+
+  .mat-info{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);margin-top:7px;line-height:1.65;}
+  .mat-info span{color:var(--text);}
+
+  #cbwrap{top:54px;right:14px;width:16px;height:220px;pointer-events:none;}
+  #cb-canvas{width:16px;height:220px;border:1px solid var(--border);}
+  #cblabels{position:absolute;left:22px;top:0;height:220px;display:flex;flex-direction:column;justify-content:space-between;}
+  .cbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);white-space:nowrap;}
+  #cb-field-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;color:var(--accent);margin-bottom:4px;text-align:center;}
+
+  #statusbar{bottom:0;left:0;right:0;height:28px;background:var(--panel);border-top:1px solid var(--border);
+    display:flex;align-items:center;padding:0 14px;gap:20px;backdrop-filter:blur(8px);}
+  .st{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);}
+  .st span{color:var(--text);}
+
+  #viewbtns{bottom:36px;right:14px;display:flex;flex-direction:column;gap:5px;pointer-events:all;}
+  .vbtn{background:var(--panel);border:1px solid var(--border);color:var(--dim);font-family:'JetBrains Mono',monospace;
+    font-size:9px;padding:5px 10px;cursor:pointer;letter-spacing:0.5px;transition:all 0.15s;backdrop-filter:blur(8px);}
+  .vbtn:hover{border-color:var(--accent);color:var(--accent);}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .toggle{position:relative;width:36px;height:18px;}
+  .toggle input{opacity:0;width:0;height:0;}
+  .slider-tog{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--border);border-radius:18px;transition:.3s;}
+  .slider-tog:before{position:absolute;content:"";height:12px;width:12px;left:3px;bottom:3px;background:var(--dim);border-radius:50%;transition:.3s;}
+  input:checked + .slider-tog{background:rgba(0,229,255,0.3);}
+  input:checked + .slider-tog:before{transform:translateX(18px);background:var(--accent);}
+</style>
+</head>
+<body>
+
+<canvas id="three-canvas"></canvas>
+
+<div class="hud" id="topbar">
+  <h1>FEA PLATE WITH CIRCULAR HOLE</h1>
+  <div class="tags">
+    <span class="tag">KIRSCH SOLUTION</span>
+    <span class="tag">PLANE STRESS</span>
+    <span class="tag live" id="tag-mat">STEEL, E=210 GPa</span>
+    <span class="tag live" id="tag-load">UNIAXIAL X</span>
+  </div>
+</div>
+
+<div class="hud" id="leftpanel">
+
+  <div class="sec">
+    <div class="sec-title">Loading Condition</div>
+    <select class="msel" id="loadType" onchange="updateLoading()">
+      <option value="uniax_x">Uniaxial tension (σ in x)</option>
+      <option value="uniax_y">Uniaxial tension (σ in y)</option>
+      <option value="biax_eq">Biaxial equal (σx = σy)</option>
+      <option value="biax_21">Biaxial 2:1 (σy = σx/2)</option>
+      <option value="shear">Pure shear (τxy)</option>
+      <option value="compress">Uniaxial compression (-σ in x)</option>
+    </select>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Stress Field</div>
+    <div class="btn-grid">
+      <button class="mbtn active" data-mode="sigma_x" onclick="setMode(this)">σ_x  Stress XX</button>
+      <button class="mbtn" data-mode="sigma_y" onclick="setMode(this)">σ_y  Stress YY</button>
+      <button class="mbtn" data-mode="tau_xy" onclick="setMode(this)">τ_xy Shear XY</button>
+      <button class="mbtn" data-mode="sigma_vm" onclick="setMode(this)">σ_vm Von Mises</button>
+      <button class="mbtn" data-mode="sigma_1" onclick="setMode(this)">σ_1  Principal Max</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Material</div>
+    <select class="msel" id="matSel" onchange="updateMaterial()">
+      <option value="steel">Mild Steel (AISI 1020)</option>
+      <option value="s275">Structural Steel S275</option>
+      <option value="ss304">Stainless Steel 304</option>
+      <option value="al6061">Aluminium 6061-T6</option>
+      <option value="al7075">Aluminium 7075-T6</option>
+      <option value="ti6al4v">Titanium Ti-6Al-4V</option>
+      <option value="copper">Copper (annealed)</option>
+    </select>
+    <div class="mat-info">
+      E = <span id="m-E">210</span> GPa, ν = <span id="m-nu">0.30</span><br>
+      σ<sub>y</sub> = <span id="m-sy">250</span> MPa, ρ = <span id="m-rho">7850</span> kg/m³
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Parameters</div>
+    <div class="sl-group">
+      <div class="sl-hdr"><span class="sl-label">Applied Load σ₀</span><span class="sl-val" id="lv">100 MPa</span></div>
+      <input type="range" min="10" max="300" value="100" id="loadSl" oninput="updateParams()">
+    </div>
+    <div class="sl-group">
+      <div class="sl-hdr"><span class="sl-label">Hole Radius / W</span><span class="sl-val" id="rv">0.30</span></div>
+      <input type="range" min="10" max="48" value="30" id="ratioSl" oninput="updateParams()">
+    </div>
+    <div class="sl-group">
+      <div class="sl-hdr"><span class="sl-label">Mesh Density</span><span class="sl-val" id="mv">40</span></div>
+      <input type="range" min="15" max="55" value="40" id="meshSl" oninput="updateParams()">
+    </div>
+    <div class="sl-group">
+      <div class="sl-hdr"><span class="sl-label">Plate Thickness</span><span class="sl-val" id="tv">0.08</span></div>
+      <input type="range" min="2" max="25" value="8" id="thickSl" oninput="updateParams()">
+    </div>
+    <div class="sl-group">
+      <div class="sl-hdr"><span class="sl-label">Extrude Scale</span><span class="sl-val" id="ev">1.0x</span></div>
+      <input type="range" min="0" max="30" value="10" id="extSl" oninput="updateParams()">
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Visualisation</div>
+    <div class="toggle-row">
+      <span class="sl-label">Extrude by stress</span>
+      <label class="toggle"><input type="checkbox" id="extrudeToggle" checked onchange="rebuild()"><span class="slider-tog"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span class="sl-label">Show mesh wireframe</span>
+      <label class="toggle"><input type="checkbox" id="wireToggle" onchange="toggleWire()"><span class="slider-tog"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span class="sl-label">Show full plate (mirror)</span>
+      <label class="toggle"><input type="checkbox" id="mirrorToggle" checked onchange="rebuild()"><span class="slider-tog"></span></label>
+    </div>
+    <div class="toggle-row">
+      <span class="sl-label">Animate load</span>
+      <label class="toggle"><input type="checkbox" id="animToggle" onchange="toggleAnim()"><span class="slider-tog"></span></label>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Results</div>
+    <div class="res-item"><div class="res-label">Stress Conc. Factor Kt</div><div class="res-val c-info" id="r-kt">3.00</div></div>
+    <div class="res-item"><div class="res-label">σ_vm max (at hole)</div><div class="res-val c-danger" id="r-smax">300 MPa</div></div>
+    <div class="res-item"><div class="res-label">Yield Safety Factor</div><div class="res-val c-warn" id="r-sf">0.83</div></div>
+    <div class="res-item"><div class="res-label">Status</div><div class="res-val" id="r-status">YIELDED</div></div>
+  </div>
+</div>
+
+<div class="hud" id="cbwrap">
+  <div id="cb-field-label">σ_x MPa</div>
+  <canvas id="cb-canvas" width="16" height="220"></canvas>
+  <div id="cblabels"></div>
+</div>
+
+<div class="hud" id="viewbtns">
+  <button class="vbtn" onclick="setView('iso')">ISO VIEW</button>
+  <button class="vbtn" onclick="setView('top')">TOP VIEW</button>
+  <button class="vbtn" onclick="setView('front')">FRONT VIEW</button>
+  <button class="vbtn" onclick="setView('side')">SIDE VIEW</button>
+</div>
+
+<div class="hud" id="statusbar">
+  <div class="st">NODES <span id="st-n">-</span></div>
+  <div class="st">ELEMENTS <span id="st-e">-</span></div>
+  <div class="st">MODE <span id="st-m">σ_x</span></div>
+  <div class="st">DRAG to rotate, SCROLL to zoom, SHIFT+DRAG to pan</div>
+</div>
+
+<div id="tip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// scene setup
+const canvas3 = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas: canvas3, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x07090e, 1);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x07090e, 0.10);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
+camera.position.set(2.2, 2.0, 2.8);
+camera.lookAt(0, 0, 0);
+
+// lighting
+scene.add(new THREE.AmbientLight(0x1a2a3a, 1.2));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(3, 5, 3);
+scene.add(dirLight);
+const pointLight = new THREE.PointLight(0x00e5ff, 0.6, 10);
+pointLight.position.set(-1, 2, 1);
+scene.add(pointLight);
+const pointLight2 = new THREE.PointLight(0xff5722, 0.4, 10);
+pointLight2.position.set(2, -1, 2);
+scene.add(pointLight2);
+
+const gridHelper = new THREE.GridHelper(6, 30, 0x1a2535, 0x111820);
+gridHelper.position.y = -0.05;
+scene.add(gridHelper);
+
+// orbit controls
+let isDragging = false, isShift = false;
+let lastMouse = { x: 0, y: 0 };
+let spherical = { theta: 0.6, phi: 1.0, r: 4.2 };
+let target = new THREE.Vector3(0, 0.05, 0);
+
+function updateCamera() {
+  camera.position.set(
+    target.x + spherical.r * Math.sin(spherical.phi) * Math.sin(spherical.theta),
+    target.y + spherical.r * Math.cos(spherical.phi),
+    target.z + spherical.r * Math.sin(spherical.phi) * Math.cos(spherical.theta)
+  );
+  camera.lookAt(target);
+}
+updateCamera();
+
+canvas3.addEventListener('mousedown', e => { isDragging = true; isShift = e.shiftKey; lastMouse = { x: e.clientX, y: e.clientY }; });
+canvas3.addEventListener('mouseup', () => isDragging = false);
+canvas3.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - lastMouse.x;
+  const dy = e.clientY - lastMouse.y;
+  lastMouse = { x: e.clientX, y: e.clientY };
+  if (isShift) {
+    target.x -= dx * 0.005;
+    target.y += dy * 0.005;
+  } else {
+    spherical.theta -= dx * 0.008;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.008));
+  }
+  updateCamera();
+});
+canvas3.addEventListener('wheel', e => {
+  spherical.r = Math.max(0.5, Math.min(15, spherical.r + e.deltaY * 0.005));
+  updateCamera();
+  e.preventDefault();
+}, { passive: false });
+
+let lastTouch = null;
+canvas3.addEventListener('touchstart', e => { lastTouch = e.touches[0]; });
+canvas3.addEventListener('touchmove', e => {
+  if (!lastTouch) return;
+  const t = e.touches[0];
+  const dx = t.clientX - lastTouch.clientX;
+  const dy = t.clientY - lastTouch.clientY;
+  spherical.theta -= dx * 0.01;
+  spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.01));
+  lastTouch = t;
+  updateCamera();
+  e.preventDefault();
+}, { passive: false });
+
+// materials
+const materials = {
+  steel:   { name: 'Mild Steel AISI 1020',   E: 210, nu: 0.30, sy: 250,  rho: 7850 },
+  s275:    { name: 'Structural Steel S275',  E: 210, nu: 0.30, sy: 275,  rho: 7850 },
+  ss304:   { name: 'Stainless Steel 304',    E: 193, nu: 0.29, sy: 215,  rho: 8000 },
+  al6061:  { name: 'Aluminium 6061-T6',      E: 69,  nu: 0.33, sy: 276,  rho: 2700 },
+  al7075:  { name: 'Aluminium 7075-T6',      E: 72,  nu: 0.33, sy: 503,  rho: 2810 },
+  ti6al4v: { name: 'Titanium Ti-6Al-4V',     E: 114, nu: 0.34, sy: 880,  rho: 4430 },
+  copper:  { name: 'Copper (annealed)',      E: 117, nu: 0.34, sy: 70,   rho: 8960 }
+};
+let currentMat = materials.steel;
+
+// loading conditions
+const loadings = {
+  uniax_x:  { label: 'UNIAXIAL X',    fx:  1, fy:  0,   ftxy: 0, Kt: 3.00 },
+  uniax_y:  { label: 'UNIAXIAL Y',    fx:  0, fy:  1,   ftxy: 0, Kt: 3.00 },
+  biax_eq:  { label: 'BIAXIAL EQUAL', fx:  1, fy:  1,   ftxy: 0, Kt: 2.00 },
+  biax_21:  { label: 'BIAXIAL 2:1',   fx:  1, fy:  0.5, ftxy: 0, Kt: 2.50 },
+  shear:    { label: 'PURE SHEAR',    fx:  0, fy:  0,   ftxy: 1, Kt: 4.00 },
+  compress: { label: 'COMPRESSION',   fx: -1, fy:  0,   ftxy: 0, Kt: 3.00 }
+};
+let currentLoad = loadings.uniax_x;
+
+// state
+let mode = 'sigma_x';
+let sigma0 = 100, ratio = 0.30, N = 40, extScale = 1.0, plateThickness = 0.08;
+let doExtrude = true, doMirror = true, doAnim = false;
+let meshGroup = null, wireGroup = null;
+let animT = 0;
+
+// kirsch solution for uniaxial x-tension, returns cartesian stress tensor
+function kirschX(x, y, a, sigma) {
+  const r = Math.sqrt(x*x + y*y);
+  if (r < a * 1.0005) return { sx: 0, sy: 0, txy: 0 };
+  const th = Math.atan2(y, x);
+  const rr2 = (a / r) ** 2, rr4 = rr2 * rr2;
+  const c2 = Math.cos(2 * th), s2 = Math.sin(2 * th);
+  const ct = Math.cos(th), st = Math.sin(th);
+  const srr = sigma / 2 * (1 - rr2) + sigma / 2 * (1 - 4 * rr2 + 3 * rr4) * c2;
+  const stt = sigma / 2 * (1 + rr2) - sigma / 2 * (1 + 3 * rr4) * c2;
+  const srt = -sigma / 2 * (1 + 2 * rr2 - 3 * rr4) * s2;
+  return {
+    sx:  srr * ct*ct + stt * st*st - 2 * srt * st * ct,
+    sy:  srr * st*st + stt * ct*ct + 2 * srt * st * ct,
+    txy: (srr - stt) * st * ct + srt * (ct*ct - st*st)
+  };
+}
+
+// generalised kirsch for arbitrary in-plane far-field via principal decomposition
+function kirsch(x, y, a, sx_inf, sy_inf, txy_inf) {
+  if (Math.abs(sx_inf) + Math.abs(sy_inf) + Math.abs(txy_inf) < 1e-9) return { sx:0, sy:0, txy:0 };
+  const sm = (sx_inf + sy_inf) / 2;
+  const sd = (sx_inf - sy_inf) / 2;
+  const R = Math.sqrt(sd*sd + txy_inf*txy_inf);
+  const s1 = sm + R, s2 = sm - R;
+  let alpha = 0;
+  if (Math.abs(sd) > 1e-9 || Math.abs(txy_inf) > 1e-9) {
+    alpha = 0.5 * Math.atan2(2 * txy_inf, sx_inf - sy_inf);
+  }
+  const ca = Math.cos(-alpha), sa = Math.sin(-alpha);
+  const xp = ca * x - sa * y;
+  const yp = sa * x + ca * y;
+  const sX = kirschX(xp, yp, a, s1);
+  const sYr = kirschX(yp, -xp, a, s2);
+  const sY = { sx: sYr.sy, sy: sYr.sx, txy: -sYr.txy };
+  const sxp  = sX.sx + sY.sx;
+  const syp  = sX.sy + sY.sy;
+  const txyp = sX.txy + sY.txy;
+  const c = Math.cos(alpha), s = Math.sin(alpha);
+  return {
+    sx:  c*c*sxp + s*s*syp - 2*s*c*txyp,
+    sy:  s*s*sxp + c*c*syp + 2*s*c*txyp,
+    txy: s*c*(sxp - syp) + (c*c - s*s)*txyp
+  };
+}
+
+function getField(s) {
+  if (mode === 'sigma_x') return s.sx;
+  if (mode === 'sigma_y') return s.sy;
+  if (mode === 'tau_xy')  return s.txy;
+  if (mode === 'sigma_vm') return Math.sqrt(s.sx**2 - s.sx*s.sy + s.sy**2 + 3*s.txy**2);
+  if (mode === 'sigma_1') return (s.sx + s.sy) / 2 + Math.sqrt(((s.sx - s.sy)/2)**2 + s.txy**2);
+  return s.sx;
+}
+
+function vonMises(s) {
+  return Math.sqrt(s.sx**2 - s.sx*s.sy + s.sy**2 + 3*s.txy**2);
+}
+
+function valToColor(t) {
+  const stops = [[0,0,180],[0,100,255],[0,220,220],[0,200,0],[180,220,0],[255,200,0],[255,100,0],[210,0,0]];
+  const seg = Math.max(0, Math.min(0.9999, t)) * (stops.length - 1);
+  const i = Math.floor(seg), f = seg - i;
+  const a = stops[i], b = stops[i + 1];
+  return new THREE.Color(
+    (a[0] + f * (b[0] - a[0])) / 255,
+    (a[1] + f * (b[1] - a[1])) / 255,
+    (a[2] + f * (b[2] - a[2])) / 255
+  );
+}
+
+// mesh build
+function disposeGroup(g) {
+  g.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+}
+
+function buildScene() {
+  if (meshGroup) { scene.remove(meshGroup); disposeGroup(meshGroup); }
+  if (wireGroup) { scene.remove(wireGroup); disposeGroup(wireGroup); }
+  meshGroup = new THREE.Group();
+  wireGroup = new THREE.Group();
+  scene.add(meshGroup);
+  scene.add(wireGroup);
+
+  const W = 1.0, a = ratio * W;
+  const nT = N, nR = N;
+  const thk = plateThickness;
+
+  const sx_inf  = currentLoad.fx   * sigma0;
+  const sy_inf  = currentLoad.fy   * sigma0;
+  const txy_inf = currentLoad.ftxy * sigma0;
+
+  const patchSigns = doMirror
+    ? [[1,1],[-1,1],[-1,-1],[1,-1]]
+    : [[1,1]];
+
+  const patches = [];
+  let vmin = +Infinity, vmax = -Infinity;
+  let maxVM = 0, maxVMnode = null;
+
+  for (const [xs, ys] of patchSigns) {
+    const nodes = [];
+    for (let j = 0; j <= nR; j++) {
+      for (let i = 0; i <= nT; i++) {
+        const theta = (i / nT) * (Math.PI / 2);
+        const t = Math.pow(j / nR, 0.7);
+        const xC = a * Math.cos(theta), yC = a * Math.sin(theta);
+        const cosT = Math.abs(Math.cos(theta)), sinT = Math.abs(Math.sin(theta));
+        const xO = cosT > 1e-6 ? W / cosT : W * 1e6;
+        const yO = sinT > 1e-6 ? W / sinT : W * 1e6;
+        const rO = Math.min(xO, yO);
+        const xQ = xC + t * (rO * Math.cos(theta) - xC);
+        const yQ = yC + t * (rO * Math.sin(theta) - yC);
+        const x = xs * xQ, y = ys * yQ;
+        const s = kirsch(x, y, a, sx_inf, sy_inf, txy_inf);
+        const v = getField(s);
+        nodes.push({ x, y, s, v });
+        if (v < vmin) vmin = v;
+        if (v > vmax) vmax = v;
+        const vm = vonMises(s);
+        if (vm > maxVM) { maxVM = vm; maxVMnode = {x, y}; }
+      }
+    }
+    patches.push({ xs, ys, nodes });
+  }
+  if (vmax - vmin < 1e-6) vmax = vmin + 1;
+  const vRange = vmax - vmin;
+  window._vmin = vmin; window._vmax = vmax;
+
+  const extH = doExtrude ? extScale * 0.003 : 0;
+  const yTopBase = thk;
+  const yBot     = 0;
+
+  const Pos = [], Col = [], Idx = [];
+  const wPos = [], wIdx = [];
+
+  for (const patch of patches) {
+    addPatchGeometry(patch, a, yTopBase, yBot, extH, vmin, vRange, nT, nR, Pos, Col, Idx, wPos, wIdx);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(Pos, 3));
+  geo.setAttribute('color',    new THREE.Float32BufferAttribute(Col, 3));
+  geo.setIndex(Idx);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshPhongMaterial({
+    vertexColors: true, side: THREE.DoubleSide,
+    shininess: 60, specular: 0x223344, flatShading: false
+  });
+  meshGroup.add(new THREE.Mesh(geo, mat));
+
+  const wGeo = new THREE.BufferGeometry();
+  wGeo.setAttribute('position', new THREE.Float32BufferAttribute(wPos, 3));
+  wGeo.setIndex(wIdx);
+  wireGroup.add(new THREE.LineSegments(wGeo, new THREE.LineBasicMaterial({ color: 0x000000, opacity: 0.35, transparent: true })));
+  wireGroup.visible = document.getElementById('wireToggle').checked;
+
+  const holePts = [];
+  for (let i = 0; i <= 96; i++) {
+    const ang = (i / 96) * Math.PI * 2;
+    holePts.push(new THREE.Vector3(a * Math.cos(ang), yTopBase + 0.0005, a * Math.sin(ang)));
+  }
+  meshGroup.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(holePts),
+    new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.7, transparent: true })
+  ));
+
+  drawLoadArrows(W, thk);
+
+  addAxisLine(0, 0, 0, 0.35, 0, 0, 0xff4444);
+  addAxisLine(0, 0, 0, 0, 0.35, 0, 0x44ff88);
+  addAxisLine(0, 0, 0, 0, 0, 0.35, 0x4488ff);
+
+  const nPatch = (nR+1) * (nT+1);
+  const ePatch = nR * nT;
+  document.getElementById('st-n').textContent = nPatch * patches.length * 2;
+  document.getElementById('st-e').textContent = ePatch * patches.length * 2 + (nT + nR) * patches.length * 2;
+  document.getElementById('st-m').textContent = mode;
+
+  const Kt = currentLoad.Kt;
+  const sigmaVMmax = maxVM;
+  const SF = sigmaVMmax > 1e-6 ? currentMat.sy / sigmaVMmax : Infinity;
+  document.getElementById('r-kt').textContent = Kt.toFixed(2);
+  document.getElementById('r-smax').textContent = sigmaVMmax.toFixed(1) + ' MPa';
+  document.getElementById('r-sf').textContent = isFinite(SF) ? SF.toFixed(2) : '∞';
+
+  const sfEl = document.getElementById('r-sf');
+  const stEl = document.getElementById('r-status');
+  sfEl.classList.remove('c-danger','c-warn','c-ok');
+  stEl.classList.remove('c-danger','c-warn','c-ok');
+  if (SF < 1) {
+    sfEl.classList.add('c-danger'); stEl.classList.add('c-danger');
+    stEl.textContent = 'YIELDED';
+  } else if (SF < 1.5) {
+    sfEl.classList.add('c-warn'); stEl.classList.add('c-warn');
+    stEl.textContent = 'MARGINAL';
+  } else {
+    sfEl.classList.add('c-ok'); stEl.classList.add('c-ok');
+    stEl.textContent = 'SAFE';
+  }
+
+  updateColorbar(vmin, vmax);
+}
+
+function addPatchGeometry(patch, a, yTopBase, yBot, extH, vmin, vRange, nT, nR, Pos, Col, Idx, wPos, wIdx) {
+  const { nodes } = patch;
+  const colOf = v => valToColor((v - vmin) / vRange);
+  const yTopOf = nd => yTopBase + nd.v * extH;
+
+  // top surface
+  const topBase = Pos.length / 3;
+  for (const nd of nodes) {
+    Pos.push(nd.x, yTopOf(nd), nd.y);
+    const c = colOf(nd.v);
+    Col.push(c.r, c.g, c.b);
+  }
+  for (let j = 0; j < nR; j++) {
+    for (let i = 0; i < nT; i++) {
+      const n0 = topBase + j*(nT+1) + i;
+      const n1 = topBase + j*(nT+1) + i + 1;
+      const n2 = topBase + (j+1)*(nT+1) + i + 1;
+      const n3 = topBase + (j+1)*(nT+1) + i;
+      Idx.push(n0, n1, n2,  n0, n2, n3);
+    }
+  }
+
+  // bottom surface
+  const botBase = Pos.length / 3;
+  for (const nd of nodes) {
+    Pos.push(nd.x, yBot, nd.y);
+    const c = colOf(nd.v);
+    Col.push(c.r, c.g, c.b);
+  }
+  for (let j = 0; j < nR; j++) {
+    for (let i = 0; i < nT; i++) {
+      const n0 = botBase + j*(nT+1) + i;
+      const n1 = botBase + j*(nT+1) + i + 1;
+      const n2 = botBase + (j+1)*(nT+1) + i + 1;
+      const n3 = botBase + (j+1)*(nT+1) + i;
+      Idx.push(n0, n2, n1,  n0, n3, n2);
+    }
+  }
+
+  // side walls along outer and hole boundaries
+  function addWall(jEdge) {
+    const base = Pos.length / 3;
+    for (let i = 0; i <= nT; i++) {
+      const nd = nodes[jEdge*(nT+1) + i];
+      Pos.push(nd.x, yTopOf(nd), nd.y);
+      const c = colOf(nd.v);
+      Col.push(c.r, c.g, c.b);
+      Pos.push(nd.x, yBot, nd.y);
+      Col.push(c.r, c.g, c.b);
+    }
+    for (let i = 0; i < nT; i++) {
+      const t0 = base + 2*i, b0 = base + 2*i + 1;
+      const t1 = base + 2*(i+1), b1 = base + 2*(i+1) + 1;
+      Idx.push(t0, t1, b1,  t0, b1, b0);
+    }
+  }
+  addWall(0);
+  addWall(nR);
+
+  // symmetry walls when mirror is off
+  if (!doMirror) {
+    let base = Pos.length / 3;
+    for (let j = 0; j <= nR; j++) {
+      const nd = nodes[j*(nT+1) + 0];
+      Pos.push(nd.x, yTopOf(nd), nd.y);
+      const c = colOf(nd.v);
+      Col.push(c.r, c.g, c.b);
+      Pos.push(nd.x, yBot, nd.y);
+      Col.push(c.r, c.g, c.b);
+    }
+    for (let j = 0; j < nR; j++) {
+      const t0 = base + 2*j, b0 = base + 2*j + 1;
+      const t1 = base + 2*(j+1), b1 = base + 2*(j+1) + 1;
+      Idx.push(t0, b1, t1,  t0, b0, b1);
+    }
+    base = Pos.length / 3;
+    for (let j = 0; j <= nR; j++) {
+      const nd = nodes[j*(nT+1) + nT];
+      Pos.push(nd.x, yTopOf(nd), nd.y);
+      const c = colOf(nd.v);
+      Col.push(c.r, c.g, c.b);
+      Pos.push(nd.x, yBot, nd.y);
+      Col.push(c.r, c.g, c.b);
+    }
+    for (let j = 0; j < nR; j++) {
+      const t0 = base + 2*j, b0 = base + 2*j + 1;
+      const t1 = base + 2*(j+1), b1 = base + 2*(j+1) + 1;
+      Idx.push(t0, t1, b1,  t0, b1, b0);
+    }
+  }
+
+  // wireframe on top surface
+  const wBase = wPos.length / 3;
+  for (const nd of nodes) {
+    wPos.push(nd.x, yTopOf(nd) + 0.0003, nd.y);
+  }
+  for (let j = 0; j < nR; j++) {
+    for (let i = 0; i < nT; i++) {
+      const n0 = wBase + j*(nT+1) + i;
+      const n1 = wBase + j*(nT+1) + i + 1;
+      const n2 = wBase + (j+1)*(nT+1) + i + 1;
+      const n3 = wBase + (j+1)*(nT+1) + i;
+      wIdx.push(n0,n1, n1,n2, n2,n3, n3,n0);
+    }
+  }
+}
+
+function drawLoadArrows(W, thk) {
+  const yArr = thk + 0.005;
+  const L = currentLoad;
+
+  if (Math.abs(L.fx) > 1e-6) {
+    const sign = Math.sign(L.fx);
+    const col = sign > 0 ? 0xff5722 : 0x00a8ff;
+    for (let k = -3; k <= 3; k++) {
+      const zz = k / 3 * W;
+      addArrow(sign * (W + 0.25), yArr, zz, sign * (W + 0.05), yArr, zz, col);
+      addArrow(-sign * (W + 0.25), yArr, zz, -sign * (W + 0.05), yArr, zz, col);
+    }
+  }
+  if (Math.abs(L.fy) > 1e-6) {
+    const sign = Math.sign(L.fy);
+    const col = sign > 0 ? 0xff5722 : 0x00a8ff;
+    for (let k = -3; k <= 3; k++) {
+      const xx = k / 3 * W;
+      addArrow(xx, yArr, sign * (W + 0.25), xx, yArr, sign * (W + 0.05), col);
+      addArrow(xx, yArr, -sign * (W + 0.25), xx, yArr, -sign * (W + 0.05), col);
+    }
+  }
+  if (Math.abs(L.ftxy) > 1e-6) {
+    const col = 0xe040ff;
+    for (let k = -3; k <= 3; k++) {
+      const xx = k / 3 * W * 0.9;
+      addArrow(xx - 0.15, yArr, W + 0.12, xx + 0.05, yArr, W + 0.12, col);
+      addArrow(xx + 0.15, yArr, -W - 0.12, xx - 0.05, yArr, -W - 0.12, col);
+    }
+    for (let k = -3; k <= 3; k++) {
+      const zz = k / 3 * W * 0.9;
+      addArrow(W + 0.12, yArr, zz - 0.15, W + 0.12, yArr, zz + 0.05, col);
+      addArrow(-W - 0.12, yArr, zz + 0.15, -W - 0.12, yArr, zz - 0.05, col);
+    }
+  }
+}
+
+function addArrow(x1, y1, z1, x2, y2, z2, col) {
+  const pts = [new THREE.Vector3(x1, y1, z1), new THREE.Vector3(x2, y2, z2)];
+  meshGroup.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color: col })
+  ));
+  const dir = new THREE.Vector3(x2 - x1, y2 - y1, z2 - z1).normalize();
+  const coneGeo = new THREE.ConeGeometry(0.022, 0.07, 10);
+  const cone = new THREE.Mesh(coneGeo, new THREE.MeshBasicMaterial({ color: col }));
+  cone.position.set(x2, y2, z2);
+  cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  meshGroup.add(cone);
+}
+
+function addAxisLine(x1,y1,z1,x2,y2,z2,col) {
+  scene.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x1,y1,z1), new THREE.Vector3(x2,y2,z2)]),
+    new THREE.LineBasicMaterial({ color: col })
+  ));
+}
+
+// colorbar
+function updateColorbar(vmin, vmax) {
+  const cb = document.getElementById('cb-canvas');
+  const ctx = cb.getContext('2d');
+  const h = 220;
+  for (let i = 0; i < h; i++) {
+    const t = 1 - i / h;
+    const col = valToColor(t);
+    ctx.fillStyle = `rgb(${Math.round(col.r*255)},${Math.round(col.g*255)},${Math.round(col.b*255)})`;
+    ctx.fillRect(0, i, 16, 1);
+  }
+  const lbls = document.getElementById('cblabels');
+  lbls.innerHTML = '';
+  for (let k = 0; k <= 5; k++) {
+    const v = vmax - k / 5 * (vmax - vmin);
+    const d = document.createElement('div');
+    d.className = 'cbl';
+    d.textContent = v.toFixed(0);
+    lbls.appendChild(d);
+  }
+  const titles = { sigma_x: 'σ_x MPa', sigma_y: 'σ_y MPa', tau_xy: 'τ_xy MPa', sigma_vm: 'σ_vm MPa', sigma_1: 'σ₁ MPa' };
+  document.getElementById('cb-field-label').textContent = titles[mode] || mode;
+}
+
+// controls
+function setMode(btn) {
+  mode = btn.dataset.mode;
+  document.querySelectorAll('.mbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildScene();
+}
+
+function updateParams() {
+  sigma0 = parseInt(document.getElementById('loadSl').value);
+  ratio = parseInt(document.getElementById('ratioSl').value) / 100;
+  N = parseInt(document.getElementById('meshSl').value);
+  extScale = parseInt(document.getElementById('extSl').value);
+  plateThickness = parseInt(document.getElementById('thickSl').value) / 100;
+  doExtrude = document.getElementById('extrudeToggle').checked;
+  doMirror = document.getElementById('mirrorToggle').checked;
+  document.getElementById('lv').textContent = sigma0 + ' MPa';
+  document.getElementById('rv').textContent = ratio.toFixed(2);
+  document.getElementById('mv').textContent = N;
+  document.getElementById('ev').textContent = extScale.toFixed(1) + 'x';
+  document.getElementById('tv').textContent = plateThickness.toFixed(2);
+  buildScene();
+}
+
+function updateLoading() {
+  const key = document.getElementById('loadType').value;
+  currentLoad = loadings[key];
+  document.getElementById('tag-load').textContent = currentLoad.label;
+  buildScene();
+}
+
+function updateMaterial() {
+  const key = document.getElementById('matSel').value;
+  currentMat = materials[key];
+  document.getElementById('m-E').textContent   = currentMat.E;
+  document.getElementById('m-nu').textContent  = currentMat.nu.toFixed(2);
+  document.getElementById('m-sy').textContent  = currentMat.sy;
+  document.getElementById('m-rho').textContent = currentMat.rho;
+  const shortName = currentMat.name.toUpperCase().split(' ')[0];
+  document.getElementById('tag-mat').textContent = `${shortName}, E=${currentMat.E} GPa, σy=${currentMat.sy} MPa`;
+  buildScene();
+}
+
+function rebuild() {
+  doExtrude = document.getElementById('extrudeToggle').checked;
+  doMirror  = document.getElementById('mirrorToggle').checked;
+  buildScene();
+}
+
+function toggleWire() {
+  if (wireGroup) wireGroup.visible = document.getElementById('wireToggle').checked;
+}
+
+function toggleAnim() {
+  doAnim = document.getElementById('animToggle').checked;
+}
+
+function setView(v) {
+  const views = {
+    iso:   { theta: 0.6, phi: 1.0, r: 4.2 },
+    top:   { theta: 0.0, phi: 0.05, r: 3.5 },
+    front: { theta: 0.0, phi: Math.PI/2 - 0.1, r: 3.5 },
+    side:  { theta: Math.PI/2, phi: Math.PI/2 - 0.1, r: 3.5 },
+  };
+  if (views[v]) { Object.assign(spherical, views[v]); updateCamera(); }
+}
+
+// render loop
+function animate() {
+  requestAnimationFrame(animate);
+  if (doAnim) {
+    animT += 0.02;
+    const s = 0.5 + 0.5 * Math.sin(animT);
+    sigma0 = Math.round(20 + s * 280);
+    document.getElementById('loadSl').value = sigma0;
+    document.getElementById('lv').textContent = sigma0 + ' MPa';
+    buildScene();
+  }
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+updateMaterial();
+buildScene();
+animate();
+</script>
+</body>
+</html>
