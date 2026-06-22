@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2nd Order System — Feedback Loop Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f7f7f5;
+    --surface: #ffffff;
+    --surface2: #f0efed;
+    --border: #e2e0dc;
+    --text: #1a1a18;
+    --text-muted: #6b6b66;
+    --text-faint: #9e9d98;
+    --accent: #1a5fb4;
+    --accent-light: #ddeaff;
+    --green: #2d7d46;
+    --green-light: #d6f0de;
+    --amber: #8a5c00;
+    --amber-light: #fef3d0;
+    --red: #b5251d;
+    --radius: 8px;
+    --radius-lg: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+  header p { font-size: 13px; color: var(--text-muted); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 0;
+    height: calc(100vh - 57px);
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 12px;
+  }
+
+  .ctrl-group { display: flex; flex-direction: column; gap: 16px; }
+
+  .ctrl {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ctrl-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .ctrl-name {
+    font-size: 13px;
+    color: var(--text);
+  }
+  .ctrl-val {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    min-width: 40px;
+    text-align: right;
+  }
+  .ctrl-sub {
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+
+  input[type=range] {
+    width: 100%;
+    height: 4px;
+    appearance: none;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px var(--accent);
+    cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px var(--accent);
+    cursor: pointer;
+  }
+
+  .divider { border: none; border-top: 1px solid var(--border); }
+
+  /* STATS */
+  .stats { display: flex; flex-direction: column; gap: 8px; }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+  }
+  .stat-name { font-size: 12px; color: var(--text-muted); }
+  .stat-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .stat-val.under { color: var(--red); }
+  .stat-val.critical { color: var(--amber); }
+  .stat-val.over { color: var(--green); }
+
+  /* MAIN AREA */
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* BLOCK DIAGRAM */
+  .diagram-area {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+  }
+  .diagram-area .section-label { margin-bottom: 14px; }
+
+  .block-diagram {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    position: relative;
+  }
+
+  .bd-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 16px;
+    text-align: center;
+    min-width: 80px;
+  }
+  .bd-block .bd-name { font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+  .bd-block .bd-eq { font-size: 13px; font-weight: 500; font-family: 'Georgia', serif; }
+
+  .bd-sum {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1.5px solid var(--text-muted);
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    font-weight: 300;
+    color: var(--text);
+    flex-shrink: 0;
+    position: relative;
+  }
+  .bd-sum .plus-sign { position: absolute; top: 2px; left: 6px; font-size: 11px; color: var(--green); font-weight: 600; }
+  .bd-sum .minus-sign { position: absolute; bottom: 3px; left: 6px; font-size: 11px; color: var(--red); font-weight: 600; }
+
+  .bd-arrow {
+    flex: 1;
+    height: 2px;
+    background: var(--text-muted);
+    position: relative;
+    min-width: 20px;
+  }
+  .bd-arrow::after {
+    content: '';
+    position: absolute;
+    right: -1px; top: -4px;
+    border-left: 8px solid var(--text-muted);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+
+  .feedback-wrap {
+    position: relative;
+    margin-top: 4px;
+    height: 28px;
+  }
+  .fb-line {
+    position: absolute;
+    height: 2px;
+    background: var(--text-muted);
+  }
+  .fb-label-text {
+    font-size: 11px;
+    color: var(--text-faint);
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  /* SVG DIAGRAM */
+  .diagram-svg { width: 100%; max-width: 640px; }
+
+  /* CHART AREA */
+  .chart-area {
+    flex: 1;
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .legend-swatch {
+    width: 24px; height: 2px;
+    border-radius: 1px;
+  }
+  .legend-swatch.dashed {
+    background: repeating-linear-gradient(to right, #888 0, #888 5px, transparent 5px, transparent 9px);
+    height: 2px;
+  }
+
+  .chart-wrap {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+    .main { min-height: 60vh; }
+    .chart-area { padding: 16px; }
+    header { padding: 14px 16px; }
+    .diagram-area { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>2nd Order Feedback Loop</h1>
+  <p>Interactive step response simulator</p>
+</header>
+
+<div class="layout">
+
+  <aside class="sidebar">
+
+    <div>
+      <div class="section-label">System parameters</div>
+      <div class="ctrl-group">
+
+        <div class="ctrl">
+          <div class="ctrl-header">
+            <span class="ctrl-name">Natural frequency ω<sub>n</sub></span>
+            <span class="ctrl-val" id="wn-val">5.0 <small style="font-weight:400;color:var(--text-muted)">rad/s</small></span>
+          </div>
+          <input type="range" id="wn" min="1" max="20" step="0.5" value="5">
+          <span class="ctrl-sub">How fast the system oscillates</span>
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-header">
+            <span class="ctrl-name">Damping ratio ζ</span>
+            <span class="ctrl-val" id="zeta-val">0.50</span>
+          </div>
+          <input type="range" id="zeta" min="0.05" max="2.0" step="0.05" value="0.5">
+          <span class="ctrl-sub">Controls oscillation decay</span>
+        </div>
+
+        <div class="ctrl">
+          <div class="ctrl-header">
+            <span class="ctrl-name">Loop gain K</span>
+            <span class="ctrl-val" id="k-val">1.0</span>
+          </div>
+          <input type="range" id="kgain" min="0.1" max="5.0" step="0.1" value="1.0">
+          <span class="ctrl-sub">Scales the steady-state output</span>
+        </div>
+
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div>
+      <div class="section-label">Display</div>
+      <div class="ctrl-group">
+        <div class="ctrl">
+          <div class="ctrl-header">
+            <span class="ctrl-name">Time span</span>
+            <span class="ctrl-val" id="tspan-val">5 <small style="font-weight:400;color:var(--text-muted)">s</small></span>
+          </div>
+          <input type="range" id="tspan" min="1" max="20" step="1" value="5">
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div>
+      <div class="section-label">Response metrics</div>
+      <div class="stats">
+        <div class="stat-row">
+          <span class="stat-name">Response type</span>
+          <span class="stat-val" id="stat-type">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Peak overshoot</span>
+          <span class="stat-val" id="stat-os">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Settling time (2%)</span>
+          <span class="stat-val" id="stat-ts">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Natural period</span>
+          <span class="stat-val" id="stat-period">—</span>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <main class="main">
+
+    <div class="diagram-area">
+      <div class="section-label">Block diagram</div>
+      <svg class="diagram-svg" viewBox="0 0 620 90" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Feedback loop block diagram: r(t) input, summing junction, G(s) plant, y(t) output, with unity feedback H=1">
+        <!-- Input label -->
+        <text x="8" y="34" font-size="12" fill="#6b6b66" font-family="Georgia, serif">r(t)</text>
+        <line x1="32" y1="30" x2="68" y2="30" stroke="#6b6b66" stroke-width="1.5"/>
+        <polygon points="68,25 78,30 68,35" fill="#6b6b66"/>
+
+        <!-- Summing junction -->
+        <circle cx="94" cy="30" r="16" fill="white" stroke="#6b6b66" stroke-width="1.5"/>
+        <text x="88" y="27" font-size="9" fill="#2d7d46" font-weight="700">+</text>
+        <text x="88" y="39" font-size="9" fill="#b5251d" font-weight="700">−</text>
+        <text x="90" y="34" font-size="14" fill="#1a1a18">Σ</text>
+
+        <!-- Arrow to plant -->
+        <line x1="110" y1="30" x2="168" y2="30" stroke="#6b6b66" stroke-width="1.5"/>
+        <polygon points="168,25 178,30 168,35" fill="#6b6b66"/>
+
+        <!-- Plant block -->
+        <rect x="178" y="14" width="100" height="32" rx="6" fill="#f0efed" stroke="#e2e0dc" stroke-width="1"/>
+        <text x="195" y="25" font-size="10" fill="#6b6b66" font-family="system-ui">Plant</text>
+        <text x="195" y="39" font-size="13" fill="#1a1a18" font-family="Georgia, serif">G(s)</text>
+
+        <!-- Arrow to output -->
+        <line x1="278" y1="30" x2="360" y2="30" stroke="#6b6b66" stroke-width="1.5"/>
+        <polygon points="360,25 370,30 360,35" fill="#6b6b66"/>
+
+        <!-- Output label -->
+        <text x="374" y="34" font-size="12" fill="#1a1a18" font-family="Georgia, serif" font-weight="500">y(t)</text>
+
+        <!-- Feedback path -->
+        <line x1="400" y1="30" x2="400" y2="72" stroke="#6b6b66" stroke-width="1.5"/>
+        <line x1="94" y1="72" x2="400" y2="72" stroke="#6b6b66" stroke-width="1.5"/>
+        <line x1="94" y1="46" x2="94" y2="72" stroke="#6b6b66" stroke-width="1.5"/>
+
+        <!-- Feedback label -->
+        <rect x="208" y="58" width="70" height="20" rx="4" fill="#f0efed" stroke="#e2e0dc" stroke-width="0.5"/>
+        <text x="219" y="72" font-size="11" fill="#6b6b66" font-family="Georgia, serif">H(s) = 1</text>
+
+        <!-- Feedback arrow -->
+        <polygon points="99,72 94,62 89,72" fill="#6b6b66"/>
+      </svg>
+    </div>
+
+    <div class="chart-area">
+      <div class="chart-header">
+        <div class="section-label" style="margin-bottom:0">Step response</div>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-swatch" style="background:#1a5fb4"></div>
+            <span>y(t) output</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-swatch dashed"></div>
+            <span>r(t) setpoint</span>
+          </div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="respChart" role="img" aria-label="Step response of 2nd order feedback system"></canvas>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const wnEl     = document.getElementById('wn');
+  const zetaEl   = document.getElementById('zeta');
+  const kEl      = document.getElementById('kgain');
+  const tspanEl  = document.getElementById('tspan');
+
+  function stepResponse(wn, zeta, K, tMax, N) {
+    const dt = tMax / N;
+    const ts = [], ys = [];
+    let y = 0, dy = 0;
+    for (let i = 0; i <= N; i++) {
+      ts.push(parseFloat((i * dt).toFixed(3)));
+      ys.push(parseFloat(y.toFixed(5)));
+      const ddy = wn * wn * (K - y) - 2 * zeta * wn * dy;
+      dy += ddy * dt;
+      y  += dy * dt;
+    }
+    return { ts, ys };
+  }
+
+  function calcStats(ys, ts, K, zeta, wn) {
+    const peak = Math.max(...ys);
+    const os = peak > K ? (((peak - K) / K) * 100) : 0;
+    const threshold = 0.02 * K;
+    let settlingIdx = ys.length - 1;
+    for (let i = ys.length - 1; i >= 0; i--) {
+      if (Math.abs(ys[i] - K) > threshold) { settlingIdx = i + 1; break; }
+    }
+    const tSettle = ts[Math.min(settlingIdx, ts.length - 1)];
+    const Wd = wn * Math.sqrt(Math.abs(1 - zeta * zeta));
+    const period = Wd > 0 ? (2 * Math.PI / Wd) : Infinity;
+    return { os: os.toFixed(1), ts: tSettle.toFixed(2), period: isFinite(period) ? period.toFixed(2) : '∞' };
+  }
+
+  const ctx = document.getElementById('respChart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'y(t)',
+          data: [],
+          borderColor: '#1a5fb4',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          tension: 0.3,
+          fill: false
+        },
+        {
+          label: 'r(t)',
+          data: [],
+          borderColor: '#9e9d98',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          tension: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 150 },
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        x: {
+          title: { display: true, text: 'Time (s)', font: { size: 12 }, color: '#6b6b66' },
+          ticks: { maxTicksLimit: 8, color: '#6b6b66', font: { size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        y: {
+          title: { display: true, text: 'Amplitude', font: { size: 12 }, color: '#6b6b66' },
+          ticks: { color: '#6b6b66', font: { size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'white',
+          borderColor: '#e2e0dc',
+          borderWidth: 1,
+          titleColor: '#1a1a18',
+          bodyColor: '#6b6b66',
+          padding: 10,
+          callbacks: {
+            label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(3)
+          }
+        }
+      }
+    }
+  });
+
+  function update() {
+    const wn    = parseFloat(wnEl.value);
+    const zeta  = parseFloat(zetaEl.value);
+    const K     = parseFloat(kEl.value);
+    const tMax  = parseInt(tspanEl.value);
+
+    document.getElementById('wn-val').innerHTML   = wn.toFixed(1) + ' <small style="font-weight:400;color:var(--text-muted)">rad/s</small>';
+    document.getElementById('zeta-val').textContent = zeta.toFixed(2);
+    document.getElementById('k-val').textContent    = K.toFixed(1);
+    document.getElementById('tspan-val').innerHTML  = tMax + ' <small style="font-weight:400;color:var(--text-muted)">s</small>';
+
+    const { ts, ys } = stepResponse(wn, zeta, K, tMax, 600);
+    chart.data.labels = ts;
+    chart.data.datasets[0].data = ys;
+    chart.data.datasets[1].data = ts.map(() => K);
+    chart.update();
+
+    const typeEl = document.getElementById('stat-type');
+    let type, cls;
+    if (zeta < 1)       { type = 'Underdamped';       cls = 'under'; }
+    else if (zeta === 1) { type = 'Critically damped'; cls = 'critical'; }
+    else                 { type = 'Overdamped';        cls = 'over'; }
+    typeEl.textContent = type;
+    typeEl.className = 'stat-val ' + cls;
+
+    const stats = calcStats(ys, ts, K, zeta, wn);
+    const osEl = document.getElementById('stat-os');
+    osEl.textContent = zeta < 1 ? stats.os + '%' : '0%';
+    osEl.className = 'stat-val ' + (zeta < 1 && parseFloat(stats.os) > 0 ? 'under' : 'over');
+
+    document.getElementById('stat-ts').textContent    = stats.ts + ' s';
+    document.getElementById('stat-period').textContent = zeta < 1 ? stats.period + ' s' : 'n/a';
+  }
+
+  [wnEl, zetaEl, kEl, tspanEl].forEach(el => el.addEventListener('input', update));
+  update();
+</script>
+</body>
+</html>
