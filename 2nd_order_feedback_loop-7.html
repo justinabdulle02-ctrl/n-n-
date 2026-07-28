@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2nd Order System — Bode &amp; Polar Plot</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f0f0f0; --surface: #d4d0c8; --surface2: #e8e4dc;
+    --border: #a0a098; --text: #1a1a18; --text-muted: #555550;
+    --text-faint: #888880; --accent: #cc0000; --blue: #0000cc;
+    --radius: 4px;
+  }
+  body { font-family: 'Segoe UI', Tahoma, system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  header {
+    background: #c0bdb5; border-bottom: 2px solid #888; padding: 8px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 14px; font-weight: 600; }
+  header p  { font-size: 11px; color: var(--text-muted); }
+  .mech-badge { background: #003366; color: white; font-size: 10px; font-weight: 700; padding: 3px 6px; border-radius: 2px; margin-left: auto; }
+
+  .layout { display: grid; grid-template-columns: 1fr 340px; gap: 0; height: calc(100vh - 42px); }
+
+  /* LEFT — plots */
+  .plots-area { display: flex; flex-direction: column; padding: 12px; gap: 8px; overflow: hidden; }
+
+  /* Tabs */
+  .tab-bar { display: flex; gap: 0; }
+  .tab-btn {
+    padding: 5px 16px; font-size: 12px; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--border); border-bottom: none;
+    background: var(--surface2); color: var(--text-muted);
+    border-radius: 3px 3px 0 0;
+  }
+  .tab-btn.active { background: #c8c4bc; color: var(--text); font-weight: 600; }
+
+  .tab-content { display: none; flex: 1; min-height: 0; }
+  .tab-content.active { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }
+
+  .chart-box {
+    background: #c8c4bc; border: 2px inset #888;
+    flex: 1; position: relative; min-height: 0; padding: 4px;
+  }
+  .chart-box canvas { width: 100% !important; height: 100% !important; }
+
+  /* RIGHT — controls */
+  .controls-area {
+    background: #c8c4bc; border-left: 2px solid #888;
+    padding: 12px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+  }
+
+  /* Waveform chart */
+  .waveform-box {
+    background: #1a1a1a; border: 2px inset #888;
+    height: 160px; position: relative; overflow: hidden;
+  }
+  .waveform-box canvas { width: 100% !important; height: 100% !important; }
+
+  /* Input/Output bars */
+  .bars-area { display: flex; gap: 12px; align-items: flex-end; justify-content: center; }
+  .bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .bar-label { font-size: 11px; color: var(--text-muted); }
+  .bar-container {
+    width: 36px; height: 120px;
+    background: #a0a098; border: 2px inset #888;
+    position: relative; overflow: hidden;
+  }
+  .bar-fill {
+    width: 100%;
+    position: absolute; left: 0;
+    transition: top 0.03s, height 0.03s;
+  }
+  .bar-fill.blue { background: linear-gradient(to bottom, #4488ff, #0044cc); }
+  .bar-fill.red  { background: linear-gradient(to bottom, #ff4444, #cc0000); }
+
+  /* Controls */
+  .ctrl-section { background: #d4d0c8; border: 2px inset #888; padding: 10px; }
+  .ctrl-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+
+  .ctrl { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .ctrl:last-child { margin-bottom: 0; }
+  .ctrl-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .ctrl-name { font-size: 12px; }
+  .ctrl-val  { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: #003366; }
+
+  input[type=range] {
+    width: 100%; height: 4px; appearance: none;
+    background: #888; border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #336699; border: 2px solid #fff; cursor: pointer;
+  }
+
+  /* Knob display */
+  .knob-area { display: flex; align-items: center; gap: 12px; }
+  .knob-visual {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #e0ddd8, #888);
+    border: 3px solid #666; position: relative; flex-shrink: 0;
+  }
+  .knob-needle {
+    position: absolute; top: 50%; left: 50%;
+    width: 2px; height: 22px;
+    background: #003366; border-radius: 1px;
+    transform-origin: bottom center;
+    transform: translateX(-50%) rotate(0deg);
+  }
+  .knob-info { flex: 1; }
+  .knob-info .label { font-size: 13px; font-weight: 600; }
+  .knob-info .value { font-size: 20px; font-weight: 700; color: #003366; font-variant-numeric: tabular-nums; }
+  .knob-info .unit  { font-size: 11px; color: var(--text-muted); }
+  .knob-info .wn-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stat-box { background: #b8b4ac; border: 1px inset #888; padding: 6px 8px; }
+  .stat-name { font-size: 10px; color: var(--text-muted); }
+  .stat-val  { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: #003366; }
+
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    .controls-area { border-left: none; border-top: 2px solid #888; }
+    .plots-area { height: 60vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>2nd Order System — Frequency Response</h1>
+    <p>Bode plot · Polar plot · Input/Output visualisation</p>
+  </div>
+
+</header>
+
+<div class="layout">
+
+  <!-- LEFT: plots -->
+  <div class="plots-area">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('bode', this)">Bode plot</button>
+      <button class="tab-btn" onclick="switchTab('polar', this)">Polar plot</button>
+    </div>
+
+    <!-- Bode tab -->
+    <div class="tab-content active" id="tab-bode">
+      <div class="chart-box" style="flex:1.2">
+        <canvas id="gainChart"></canvas>
+      </div>
+      <div class="chart-box" style="flex:1">
+        <canvas id="phaseChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Polar tab -->
+    <div class="tab-content" id="tab-polar">
+      <div class="chart-box" style="flex:1">
+        <canvas id="polarChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: controls -->
+  <div class="controls-area">
+
+    <!-- Waveform chart -->
+    <div>
+      <div class="ctrl-title" style="margin-bottom:4px">Waveform</div>
+      <div class="waveform-box">
+        <canvas id="waveChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Input/Output bars -->
+    <div class="bars-area">
+      <div class="bar-wrap">
+        <div class="bar-container">
+          <div class="bar-fill blue" id="input-bar" style="height:50%"></div>
+        </div>
+        <div class="bar-label">Input</div>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-container">
+          <div class="bar-fill red" id="output-bar" style="height:50%"></div>
+        </div>
+        <div class="bar-label">Output</div>
+      </div>
+    </div>
+
+    <!-- Damping ratio -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">System parameters</div>
+      <div class="ctrl">
+        <div class="ctrl-header">
+          <span class="ctrl-name">Damping Ratio, Z</span>
+          <span class="ctrl-val" id="zeta-val">0.70</span>
+        </div>
+        <input type="range" id="zeta" min="0" max="1.5" step="0.01" value="0.7">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-faint)"><span>0</span><span>1</span><span>1.5</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">(Wₙ = 10 rad/s)</div>
+      </div>
+    </div>
+
+    <!-- Frequency knob -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Test frequency</div>
+      <div class="knob-area">
+        <div class="knob-visual">
+          <div class="knob-needle" id="knob-needle"></div>
+        </div>
+        <div class="knob-info">
+          <div class="label">Freq, rad/s</div>
+          <div class="value" id="freq-val">2</div>
+          <div class="unit">rad/s</div>
+        </div>
+      </div>
+      <input type="range" id="freq" min="0.1" max="100" step="0.1" value="2" style="margin-top:8px">
+    </div>
+
+    <!-- Stats at current frequency -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">At selected frequency</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-name">Gain (dB)</div><div class="stat-val" id="stat-gain">—</div></div>
+        <div class="stat-box"><div class="stat-name">Phase (°)</div><div class="stat-val" id="stat-phase">—</div></div>
+        <div class="stat-box"><div class="stat-name">Output amp</div><div class="stat-val" id="stat-amp">—</div></div>
+        <div class="stat-box"><div class="stat-name">Phase lag</div><div class="stat-val" id="stat-lag">—</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const WN = 10; // fixed natural frequency
+
+  // ── Bode maths (matching LabVIEW block diagram) ──
+  function bode(zeta, omega) {
+    const re = WN*WN - omega*omega;
+    const im = 2*zeta*WN*omega;
+    const magDenom = Math.sqrt(re*re + im*im);
+    const gainLinear = WN*WN / magDenom;
+    const gainDb = 20 * Math.log10(gainLinear);
+    const phaseRad = -Math.atan2(im, re);
+    const phaseDeg = phaseRad * (180/Math.PI);
+    return { gainDb, phaseDeg, gainLinear, phaseRad };
+  }
+
+  function logspace(lo, hi, n) {
+    const arr = [];
+    for (let i=0; i<n; i++) arr.push(Math.pow(10, lo + (hi-lo)*i/(n-1)));
+    return arr;
+  }
+
+  // ── Chart helpers ──
+  const GRID = 'rgba(0,0,0,0.1)';
+
+  const gainChart = new Chart(document.getElementById('gainChart'), {
+    type: 'line',
+    data: { datasets: [
+      { label:'Gain', data:[], borderColor:'#1a1a1a', borderWidth:1.5, pointRadius:0, tension:0.1, fill:false },
+      { label:'Marker', data:[], borderColor:'#cc0000', backgroundColor:'#cc0000', pointRadius:6, pointHoverRadius:6, showLine:false }
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:80},
+      scales: {
+        x: { type:'logarithmic', title:{display:true,text:'Frequency, rad/s',font:{size:10}}, ticks:{color:'#333',font:{size:9}, callback:v=>{ const l=Math.log10(v); return Math.abs(l-Math.round(l))<0.01?'10^'+Math.round(l):''; }}, grid:{color:GRID} },
+        y: { title:{display:true,text:'Gain, dB',font:{size:10}}, ticks:{color:'#333',font:{size:9}}, grid:{color:GRID} }
+      },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{title:i=>'ω='+Number(i[0].parsed.x).toFixed(2)+' rad/s', label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+' dB'}} }
+    }
+  });
+
+  const phaseChart = new Chart(document.getElementById('phaseChart'), {
+    type: 'line',
+    data: { datasets: [
+      { label:'Phase', data:[], borderColor:'#1a1a1a', borderWidth:1.5, pointRadius:0, tension:0.1, fill:false },
+      { label:'Marker', data:[], borderColor:'#cc0000', backgroundColor:'#cc0000', pointRadius:6, pointHoverRadius:6, showLine:false }
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:80},
+      scales: {
+        x: { type:'logarithmic', title:{display:true,text:'Frequency, rad/s',font:{size:10}}, ticks:{color:'#333',font:{size:9}, callback:v=>{ const l=Math.log10(v); return Math.abs(l-Math.round(l))<0.01?'10^'+Math.round(l):''; }}, grid:{color:GRID} },
+        y: { title:{display:true,text:'Phase, degrees',font:{size:10}}, ticks:{color:'#333',font:{size:9}}, grid:{color:GRID}, min:-200, max:10 }
+      },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{title:i=>'ω='+Number(i[0].parsed.x).toFixed(2)+' rad/s', label:c=>c.parsed.y.toFixed(1)+'°'}} }
+    }
+  });
+
+  const polarChart = new Chart(document.getElementById('polarChart'), {
+    type: 'line',
+    data: { datasets: [
+      { label:'Nyquist', data:[], borderColor:'#1a1a1a', borderWidth:1.5, pointRadius:0, tension:0.1, fill:false },
+      { label:'Marker', data:[], borderColor:'#cc0000', backgroundColor:'#cc0000', pointRadius:6, showLine:false }
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:80},
+      scales: {
+        x: { title:{display:true,text:'Re',font:{size:10}}, ticks:{color:'#333',font:{size:9}}, grid:{color:GRID} },
+        y: { title:{display:true,text:'Im',font:{size:10}}, ticks:{color:'#333',font:{size:9}}, grid:{color:GRID} }
+      },
+      plugins:{ legend:{display:false} }
+    }
+  });
+
+  // ── Waveform — raw canvas for smooth animation ──
+  const waveCanvas = document.getElementById('waveChart');
+  const waveCtx = waveCanvas.getContext('2d');
+
+  function resizeWaveCanvas() {
+    const box = waveCanvas.parentElement;
+    waveCanvas.width  = box.clientWidth;
+    waveCanvas.height = box.clientHeight;
+  }
+  resizeWaveCanvas();
+  window.addEventListener('resize', resizeWaveCanvas);
+
+  let currentZeta = 0.7, currentFreq = 2;
+  let startTime = null;
+
+  function animateWaveform(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsed = (timestamp - startTime) / 1000; // seconds
+
+    const omega = currentFreq;
+    const { gainLinear, phaseRad } = bode(currentZeta, omega);
+
+    const W = waveCanvas.width, H = waveCanvas.height;
+    waveCtx.fillStyle = '#1a1a1a';
+    waveCtx.fillRect(0, 0, W, H);
+
+    // Grid lines
+    waveCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+    waveCtx.lineWidth = 1;
+    for (let y = 0.25; y < 1; y += 0.25) {
+      waveCtx.beginPath();
+      waveCtx.moveTo(0, H * y);
+      waveCtx.lineTo(W, H * y);
+      waveCtx.stroke();
+    }
+    // Zero line
+    waveCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+    waveCtx.beginPath();
+    waveCtx.moveTo(0, H/2);
+    waveCtx.lineTo(W, H/2);
+    waveCtx.stroke();
+
+    // Visual speed scaling — always show ~2 full cycles
+    // regardless of actual omega so motion is always visible
+    const visSpeed = 2; // cycles visible at once
+    const scale = (2 * Math.PI * visSpeed) / W;
+
+    // Draw input (blue)
+    waveCtx.strokeStyle = '#4488ff';
+    waveCtx.lineWidth = 2;
+    waveCtx.beginPath();
+    for (let px = 0; px < W; px++) {
+      const phase = px * scale - omega * elapsed;
+      const y = H/2 - (H * 0.38) * Math.sin(phase);
+      px === 0 ? waveCtx.moveTo(px, y) : waveCtx.lineTo(px, y);
+    }
+    waveCtx.stroke();
+
+    // Draw output (red) — same frequency, scaled amplitude, phase shifted
+    waveCtx.strokeStyle = '#ff4444';
+    waveCtx.lineWidth = 2;
+    waveCtx.beginPath();
+    const maxAmp = Math.min(gainLinear, 1.4); // cap so it stays in box
+    for (let px = 0; px < W; px++) {
+      const phase = px * scale - omega * elapsed + phaseRad;
+      const y = H/2 - (H * 0.38) * maxAmp * Math.sin(phase);
+      px === 0 ? waveCtx.moveTo(px, y) : waveCtx.lineTo(px, y);
+    }
+    waveCtx.stroke();
+
+    // Labels
+    waveCtx.font = '10px system-ui';
+    waveCtx.fillStyle = '#4488ff';
+    waveCtx.fillText('Input', 4, 12);
+    waveCtx.fillStyle = '#ff4444';
+    waveCtx.fillText('Output', 4, 24);
+
+    // Bars — oscillate around centre like LabVIEW
+    const inputVal  = Math.sin(omega * elapsed);
+    const outputVal = gainLinear * Math.sin(omega * elapsed + phaseRad);
+    const clampOutput = Math.min(Math.max(outputVal, -1.4), 1.4) / 1.4;
+
+    // Each bar: top = 50% - halfHeight, height = fill from centre to current value
+    function setBar(id, val) {
+      const bar = document.getElementById(id);
+      const halfH = Math.abs(val) * 45; // max 45% of container
+      if (val >= 0) {
+        bar.style.top    = (50 - halfH) + '%';
+        bar.style.height = halfH + '%';
+      } else {
+        bar.style.top    = '50%';
+        bar.style.height = (-val * 45) + '%';
+      }
+    }
+    setBar('input-bar',  inputVal);
+    setBar('output-bar', clampOutput);
+
+    requestAnimationFrame(animateWaveform);
+  }
+
+  // ── Main update ──
+  function update() {
+    currentZeta = parseFloat(document.getElementById('zeta').value);
+    currentFreq = parseFloat(document.getElementById('freq').value);
+
+    document.getElementById('zeta-val').textContent = currentZeta.toFixed(2);
+    document.getElementById('freq-val').textContent = currentFreq.toFixed(1);
+
+    // Rotate knob needle: map freq 0.1-100 → -135 to +135 degrees
+    const angle = -135 + (Math.log10(currentFreq) - Math.log10(0.1)) / (Math.log10(100) - Math.log10(0.1)) * 270;
+    document.getElementById('knob-needle').style.transform = `translateX(-50%) rotate(${angle}deg)`;
+
+    const omegas = logspace(-1, 2, 300);
+    const gainData=[], phaseData=[], polarData=[];
+
+    omegas.forEach(w => {
+      const { gainDb, phaseDeg, gainLinear, phaseRad } = bode(currentZeta, w);
+      gainData.push({ x:w, y:parseFloat(gainDb.toFixed(3)) });
+      phaseData.push({ x:w, y:parseFloat(phaseDeg.toFixed(3)) });
+      polarData.push({ x: parseFloat((gainLinear*Math.cos(phaseRad)).toFixed(4)), y: parseFloat((gainLinear*Math.sin(phaseRad)).toFixed(4)) });
+    });
+
+    // Red dot at selected frequency
+    const { gainDb, phaseDeg, gainLinear, phaseRad } = bode(currentZeta, currentFreq);
+    const polarX = gainLinear * Math.cos(phaseRad);
+    const polarY = gainLinear * Math.sin(phaseRad);
+
+    gainChart.data.datasets[0].data  = gainData;
+    gainChart.data.datasets[1].data  = [{ x: currentFreq, y: gainDb }];
+    phaseChart.data.datasets[0].data = phaseData;
+    phaseChart.data.datasets[1].data = [{ x: currentFreq, y: phaseDeg }];
+    polarChart.data.datasets[0].data = polarData;
+    polarChart.data.datasets[1].data = [{ x: polarX, y: polarY }];
+
+    gainChart.update();
+    phaseChart.update();
+    polarChart.update();
+
+    // Stats
+    document.getElementById('stat-gain').textContent  = gainDb.toFixed(1) + ' dB';
+    document.getElementById('stat-phase').textContent = phaseDeg.toFixed(1) + '°';
+    document.getElementById('stat-amp').textContent   = gainLinear.toFixed(3);
+    document.getElementById('stat-lag').textContent   = Math.abs(phaseDeg).toFixed(1) + '°';
+  }
+
+  // ── Tab switching ──
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    setTimeout(() => { gainChart.resize(); phaseChart.resize(); polarChart.resize(); }, 50);
+  }
+
+  ['zeta','freq'].forEach(id => document.getElementById(id).addEventListener('input', update));
+
+  update();
+  animateWaveform();
+</script>
+</body>
+</html>
