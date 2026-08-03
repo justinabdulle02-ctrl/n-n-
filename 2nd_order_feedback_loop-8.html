@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2nd Order System — Frequency Response</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f0f0f0; --surface: #d4d0c8; --surface2: #e8e4dc;
+    --border: #a0a098; --text: #1a1a18; --text-muted: #555550;
+    --text-faint: #888880;
+  }
+  body { font-family: 'Segoe UI', Tahoma, system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  header {
+    background: #c0bdb5; border-bottom: 2px solid #888; padding: 8px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 14px; font-weight: 600; }
+
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 0; height: calc(100vh - 42px); }
+
+  /* LEFT — plots */
+  .plots-area { display: flex; flex-direction: column; padding: 12px; gap: 8px; overflow: hidden; }
+
+  .tab-bar { display: flex; gap: 0; }
+  .tab-btn {
+    padding: 5px 16px; font-size: 12px; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--border); border-bottom: none;
+    background: var(--surface2); color: var(--text-muted);
+    border-radius: 3px 3px 0 0;
+  }
+  .tab-btn.active { background: #c8c4bc; color: var(--text); font-weight: 600; }
+
+  .tab-content { display: none; flex: 1; min-height: 0; }
+  .tab-content.active { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }
+
+  .chart-box {
+    background: #c8c4bc; border: 2px inset #888;
+    flex: 1; position: relative; min-height: 0; padding: 4px;
+  }
+  .chart-box canvas { width: 100% !important; height: 100% !important; }
+
+  /* RIGHT — controls */
+  .controls-area {
+    background: #c8c4bc; border-left: 2px solid #888;
+    padding: 12px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+  }
+
+  .ctrl-section { background: #d4d0c8; border: 2px inset #888; padding: 10px; }
+  .ctrl-title { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+
+  input[type=range] {
+    width: 100%; height: 4px; appearance: none;
+    background: #888; border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #336699; border: 2px solid #fff; cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #336699; border: 2px solid #fff; cursor: pointer;
+  }
+
+  .ctrl { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .ctrl:last-child { margin-bottom: 0; }
+  .ctrl-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .ctrl-name { font-size: 12px; }
+  .ctrl-val  { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: #003366; }
+  .slide-hint { font-size: 10px; color: var(--text-faint); font-style: italic; margin-top: 3px; }
+
+  /* Waveform */
+  .waveform-box {
+    background: #ffffff; border: 2px inset #888;
+    height: 150px; position: relative; overflow: hidden;
+  }
+  .waveform-box canvas { width: 100% !important; height: 100% !important; }
+
+  /* Bouncing balls */
+  .balls-area { display: flex; gap: 20px; align-items: center; justify-content: center; }
+  .ball-wrap { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .ball-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .ball-track {
+    width: 38px; height: 110px;
+    background: #a0a098; border: 2px inset #888;
+    position: relative; overflow: hidden; border-radius: 4px;
+  }
+  .ball {
+    width: 30px; height: 30px; border-radius: 50%;
+    position: absolute; left: 4px;
+  }
+  .ball.blue { background: radial-gradient(circle at 35% 35%, #88bbff, #0044cc); box-shadow: 0 2px 6px rgba(0,68,204,0.4); }
+  .ball.red  { background: radial-gradient(circle at 35% 35%, #ff8888, #cc0000); box-shadow: 0 2px 6px rgba(204,0,0,0.4); }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stat-box { background: #b8b4ac; border: 1px inset #888; padding: 6px 8px; }
+  .stat-name { font-size: 10px; color: var(--text-muted); }
+  .stat-val  { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: #003366; }
+
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    .controls-area { border-left: none; border-top: 2px solid #888; }
+    .plots-area { height: 60vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>2nd Order System — Frequency Response</h1>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- LEFT: plots -->
+  <div class="plots-area">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('bode', this)">Bode plot</button>
+      <button class="tab-btn" onclick="switchTab('polar', this)">Polar plot</button>
+    </div>
+
+    <div class="tab-content active" id="tab-bode">
+      <div class="chart-box" style="flex:1.2"><canvas id="gainChart"></canvas></div>
+      <div class="chart-box" style="flex:1"><canvas id="phaseChart"></canvas></div>
+    </div>
+
+    <div class="tab-content" id="tab-polar">
+      <div class="chart-box" style="flex:1"><canvas id="polarChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: controls -->
+  <div class="controls-area">
+
+    <!-- Waveform -->
+    <div>
+      <div class="ctrl-title" style="margin-bottom:4px">Waveform</div>
+      <div class="waveform-box">
+        <canvas id="waveChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Bouncing balls -->
+    <div class="balls-area">
+      <div class="ball-wrap">
+        <div class="ball-track"><div class="ball blue" id="input-ball" style="top:40px"></div></div>
+        <div class="ball-label">Input</div>
+      </div>
+      <div class="ball-wrap">
+        <div class="ball-track"><div class="ball red" id="output-ball" style="top:40px"></div></div>
+        <div class="ball-label">Output</div>
+      </div>
+    </div>
+
+    <!-- System parameters — Greek letters -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">System parameters</div>
+      <div class="ctrl">
+        <div class="ctrl-header">
+          <span class="ctrl-name">Damping ratio, ζ (zeta)</span>
+          <span class="ctrl-val" id="zeta-val">0.70</span>
+        </div>
+        <input type="range" id="zeta" min="0.01" max="1.5" step="0.01" value="0.7">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-faint)"><span>0</span><span>1</span><span>1.5</span></div>
+        <div class="slide-hint">Slide to change ζ</div>
+      </div>
+      <div class="ctrl">
+        <div class="ctrl-header">
+          <span class="ctrl-name">ωₙ (natural frequency)</span>
+          <span class="ctrl-val">10 rad/s (fixed)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Frequency slider (no knob) -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">Test frequency, ω</div>
+      <div style="font-size:22px;font-weight:700;color:#003366;font-variant-numeric:tabular-nums;text-align:center;margin-bottom:4px" id="freq-val">2.0</div>
+      <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-bottom:8px">rad/s</div>
+      <input type="range" id="freq" min="0.1" max="100" step="0.1" value="2">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-faint);margin-top:3px"><span>0.1</span><span>10</span><span>100</span></div>
+      <div class="slide-hint">Slide to change frequency</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="ctrl-section">
+      <div class="ctrl-title">At selected frequency</div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-name">Gain (dB)</div><div class="stat-val" id="stat-gain">—</div></div>
+        <div class="stat-box"><div class="stat-name">Phase (°)</div><div class="stat-val" id="stat-phase">—</div></div>
+        <div class="stat-box"><div class="stat-name">Amplitude ratio</div><div class="stat-val" id="stat-amp">—</div></div>
+        <div class="stat-box"><div class="stat-name">Phase (rad)</div><div class="stat-val" id="stat-phaserad">—</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const WN = 10;
+
+  function bode(zeta, omega) {
+    const re = WN*WN - omega*omega;
+    const im = 2*zeta*WN*omega;
+    const magDenom = Math.sqrt(re*re + im*im);
+    const gainLinear = WN*WN / magDenom;
+    const gainDb = 20 * Math.log10(gainLinear);
+    const phaseRad = -Math.atan2(im, re);
+    const phaseDeg = phaseRad * (180/Math.PI);
+    return { gainDb, phaseDeg, gainLinear, phaseRad };
+  }
+
+  function logspace(lo, hi, n) {
+    const arr = [];
+    for (let i=0; i<n; i++) arr.push(Math.pow(10, lo + (hi-lo)*i/(n-1)));
+    return arr;
+  }
+
+  const GRID = 'rgba(0,0,0,0.1)';
+
+  const gainChart = new Chart(document.getElementById('gainChart'), {
+    type: 'line',
+    data: { datasets: [
+      { label:'Gain', data:[], borderColor:'#1a1a1a', borderWidth:1.5, pointRadius:0, tension:0.1, fill:false },
+      { label:'Marker', data:[], borderColor:'#cc0000', backgroundColor:'#cc0000', pointRadius:6, pointHoverRadius:6, showLine:false }
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:80},
+      scales: {
+        x: { type:'logarithmic', title:{display:true,text:'Frequency, rad/s',font:{size:10}}, ticks:{color:'#333',font:{size:9}, callback:v=>{ const l=Math.log10(v); return Math.abs(l-Math.round(l))<0.01?'10^'+Math.round(l):''; }}, grid:{color:GRID} },
+        y: { title:{display:true,text:'Gain, dB',font:{size:10}}, ticks:{color:'#333',font:{size:9}}, grid:{color:GRID} }
+      },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{title:i=>'ω='+Number(i[0].parsed.x).toFixed(2)+' rad/s', label:c=>c.dataset.label+': '+c.parsed.y.toFixed(2)+' dB'}} }
+    }
+  });
+
+  const phaseChart = new Chart(document.getElementById('phaseChart'), {
+    type: 'line',
+    data: { datasets: [
+      { label:'Phase', data:[], borderColor:'#1a1a1a', borderWidth:1.5, pointRadius:0, tension:0.1, fill:false },
+      { label:'Marker', data:[], borderColor:'#cc0000', backgroundColor:'#cc0000', pointRadius:6, pointHoverRadius:6, showLine:false }
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:80},
+      scales: {
+        x: { type:'logarithmic', title:{display:true,text:'Frequency, rad/s',font:{size:10}}, ticks:{color:'#333',font:{size:9}, callback:v=>{ const l=Math.log10(v); return Math.abs(l-Math.round(l))<0.01?'10^'+Math.round(l):''; }}, grid:{color:GRID} },
+        y: { title:{display:true,text:'Phase, degrees',font:{size:10}}, ticks:{color:'#333',font:{size:9}}, grid:{color:GRID}, min:-200, max:10 }
+      },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{title:i=>'ω='+Number(i[0].parsed.x).toFixed(2)+' rad/s', label:c=>c.parsed.y.toFixed(1)+'°'}} }
+    }
+  });
+
+  const polarChart = new Chart(document.getElementById('polarChart'), {
+    type: 'scatter',
+    data: { datasets: [
+      { label:'Nyquist', data:[], borderColor:'#1a1a1a', backgroundColor:'transparent', borderWidth:1.5, pointRadius:0, showLine:true, tension:0.1, fill:false },
+      { label:'Marker', data:[], borderColor:'#cc0000', backgroundColor:'#cc0000', pointRadius:7, showLine:false }
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:80},
+      scales: {
+        x: { title:{display:true,text:'Re',font:{size:10}}, ticks:{color:'#333',font:{size:9}}, grid:{color:GRID} },
+        y: { title:{display:true,text:'Im',font:{size:10}}, ticks:{color:'#333',font:{size:9}}, grid:{color:GRID} }
+      },
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{
+        title:()=>'Nyquist point',
+        label:c=>'Re: '+c.parsed.x.toFixed(3)+', Im: '+c.parsed.y.toFixed(3)
+      }} }
+    }
+  });
+
+  // Waveform — raw canvas, white background
+  const waveCanvas = document.getElementById('waveChart');
+  const waveCtx = waveCanvas.getContext('2d');
+
+  function resizeWaveCanvas() {
+    const box = waveCanvas.parentElement;
+    waveCanvas.width  = box.clientWidth;
+    waveCanvas.height = box.clientHeight;
+  }
+  resizeWaveCanvas();
+  window.addEventListener('resize', resizeWaveCanvas);
+
+  let currentZeta = 0.7, currentFreq = 2;
+  let startTime = null;
+
+  function animateWaveform(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsed = (timestamp - startTime) / 1000;
+
+    const omega = currentFreq;
+    const { gainLinear, phaseRad } = bode(currentZeta, omega);
+
+    const W = waveCanvas.width, H = waveCanvas.height;
+
+    // White/grey background
+    waveCtx.fillStyle = '#e8e8e8';
+    waveCtx.fillRect(0, 0, W, H);
+
+    // Grid
+    waveCtx.strokeStyle = 'rgba(0,0,0,0.1)';
+    waveCtx.lineWidth = 1;
+    [0.25, 0.5, 0.75].forEach(s => {
+      waveCtx.beginPath(); waveCtx.moveTo(0, H*s); waveCtx.lineTo(W, H*s); waveCtx.stroke();
+      waveCtx.beginPath(); waveCtx.moveTo(W*s, 0); waveCtx.lineTo(W*s, H); waveCtx.stroke();
+    });
+    waveCtx.strokeStyle = 'rgba(0,0,0,0.25)';
+    waveCtx.beginPath(); waveCtx.moveTo(0, H/2); waveCtx.lineTo(W, H/2); waveCtx.stroke();
+
+    const visSpeed = 2;
+    const scale = (2 * Math.PI * visSpeed) / W;
+
+    // Input (blue)
+    waveCtx.strokeStyle = '#4488ff';
+    waveCtx.lineWidth = 2;
+    waveCtx.beginPath();
+    for (let px = 0; px < W; px++) {
+      const phase = px * scale - omega * elapsed;
+      const y = H/2 - (H * 0.38) * Math.sin(phase);
+      px === 0 ? waveCtx.moveTo(px, y) : waveCtx.lineTo(px, y);
+    }
+    waveCtx.stroke();
+
+    // Output (red)
+    waveCtx.strokeStyle = '#cc0000';
+    waveCtx.lineWidth = 2;
+    waveCtx.beginPath();
+    const maxAmp = Math.min(gainLinear, 1.4);
+    for (let px = 0; px < W; px++) {
+      const phase = px * scale - omega * elapsed + phaseRad;
+      const y = H/2 - (H * 0.38) * maxAmp * Math.sin(phase);
+      px === 0 ? waveCtx.moveTo(px, y) : waveCtx.lineTo(px, y);
+    }
+    waveCtx.stroke();
+
+    // Labels
+    waveCtx.font = '10px system-ui';
+    waveCtx.fillStyle = '#4488ff'; waveCtx.fillText('Input', 4, 12);
+    waveCtx.fillStyle = '#cc0000'; waveCtx.fillText('Output', 4, 24);
+
+    // Bouncing balls
+    const inputVal  = Math.sin(omega * elapsed);
+    const outputVal = gainLinear * Math.sin(omega * elapsed + phaseRad);
+    const trackH = 110, ballD = 30;
+    const centre = (trackH - ballD) / 2;
+    const range  = centre - 4;
+    document.getElementById('input-ball').style.top  = (centre - inputVal * range) + 'px';
+    document.getElementById('output-ball').style.top = (centre - Math.min(Math.max(outputVal / Math.max(gainLinear, 0.01), -1), 1) * range * Math.min(gainLinear, 1.4)) + 'px';
+
+    requestAnimationFrame(animateWaveform);
+  }
+
+  function update() {
+    currentZeta = parseFloat(document.getElementById('zeta').value);
+    currentFreq = parseFloat(document.getElementById('freq').value);
+
+    document.getElementById('zeta-val').textContent = currentZeta.toFixed(2);
+    document.getElementById('freq-val').textContent = currentFreq.toFixed(1);
+
+    const omegas = logspace(-1, 2, 300);
+    const gainData=[], phaseData=[], polarData=[];
+
+    omegas.forEach(w => {
+      const { gainDb, phaseDeg, gainLinear, phaseRad } = bode(currentZeta, w);
+      gainData.push({ x:w, y:parseFloat(gainDb.toFixed(3)) });
+      phaseData.push({ x:w, y:parseFloat(phaseDeg.toFixed(3)) });
+      polarData.push({ x: parseFloat((gainLinear*Math.cos(phaseRad)).toFixed(4)), y: parseFloat((gainLinear*Math.sin(phaseRad)).toFixed(4)) });
+    });
+
+    const { gainDb, phaseDeg, gainLinear, phaseRad } = bode(currentZeta, currentFreq);
+    const polarX = gainLinear * Math.cos(phaseRad);
+    const polarY = gainLinear * Math.sin(phaseRad);
+
+    gainChart.data.datasets[0].data  = gainData;
+    gainChart.data.datasets[1].data  = [{ x: currentFreq, y: gainDb }];
+    phaseChart.data.datasets[0].data = phaseData;
+    phaseChart.data.datasets[1].data = [{ x: currentFreq, y: phaseDeg }];
+    polarChart.data.datasets[0].data = polarData;
+    polarChart.data.datasets[1].data = [{ x: polarX, y: polarY }];
+
+    // Auto-scale polar axes based on actual data
+    const reVals = polarData.map(p => p.x);
+    const imVals = polarData.map(p => p.y);
+    const rePad = 0.15, imPad = 0.15;
+    polarChart.options.scales.x.min = Math.min(...reVals) - rePad;
+    polarChart.options.scales.x.max = Math.max(...reVals) + rePad;
+    polarChart.options.scales.y.min = Math.min(...imVals) - imPad;
+    polarChart.options.scales.y.max = Math.max(...imVals) + imPad;
+
+    gainChart.update();
+    phaseChart.update();
+    polarChart.update();
+
+    document.getElementById('stat-gain').textContent     = gainDb.toFixed(1) + ' dB';
+    document.getElementById('stat-phase').textContent    = phaseDeg.toFixed(1) + '°';
+    document.getElementById('stat-amp').textContent      = gainLinear.toFixed(3);
+    document.getElementById('stat-phaserad').textContent = phaseRad.toFixed(3) + ' rad';
+  }
+
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    setTimeout(() => { gainChart.resize(); phaseChart.resize(); polarChart.resize(); }, 50);
+  }
+
+  ['zeta','freq'].forEach(id => document.getElementById(id).addEventListener('input', update));
+  update();
+  requestAnimationFrame(animateWaveform);
+</script>
+</body>
+</html>
